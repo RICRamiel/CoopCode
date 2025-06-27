@@ -5,6 +5,7 @@ import 'prismjs/components/prism-javascript';
 import 'prismjs/themes/prism.css';
 import 'prismjs/components/prism-python';
 import { diff_match_patch } from 'diff-match-patch';
+import _ from 'lodash';
 
 class OperationTransformer {
     static transform(incomingOperation, missingOperation) {
@@ -131,6 +132,50 @@ class OperationTransformer {
 const dmp = new diff_match_patch();
 dmp.Diff_Timeout = 0;
 
+const getUserColor = (userId) => {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'];
+    const index = Math.abs(hashCode(userId)) % colors.length;
+    return colors[index];
+};
+
+const hashCode = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
+}
+
+const transformCursorPosition = (position, patches) => {
+    let newPosition = position;
+    const sortedPatches = [...patches].sort((a, b) => a.start1 - b.start1);
+
+    for (const patch of sortedPatches) {
+        const start = patch.start1;
+        const end = start + patch.length1;
+        const diff = patch.length2 - patch.length1;
+
+        if (newPosition <= start) {
+            continue;
+        }
+
+        if (newPosition <= end) {
+            if (patch.length1 === 0) {
+                newPosition = start + patch.length2;
+            } else {
+                const offset = newPosition - start;
+                const ratio = offset / patch.length1;
+                newPosition = start + Math.round(patch.length2 * ratio);
+            }
+        } else {
+            newPosition += diff;
+        }
+    }
+
+    return newPosition;
+};
+
 const CodeEditor = ({ roomId, userId }) => {
     const [code, setCode] = useState('');
     const lastServerState = useRef({ text: '', version: 0 });
@@ -138,6 +183,41 @@ const CodeEditor = ({ roomId, userId }) => {
     const lastId = useRef(-1);
     const ws = useRef(null);
     const isApplyingRemoteChange = useRef(false);
+
+    const ignoreChanges = useRef(false);
+    const [remoteCursors, setRemoteCursors] = useState({});
+    const editorRef = useRef(null);
+    const userColor = getUserColor(userId);
+    const textareaRef = useRef(null);
+    const [editorDimensions, setEditorDimensions] = useState({ lineHeight: 19, charWidth: 8.79 });
+    const isMountedRef = useRef(false);
+
+    const setTextCursorPosition = (position) => {
+        if (!textareaRef.current) return;
+
+        textareaRef.current.selectionStart = position;
+        textareaRef.current.selectionEnd = position;
+        sendCursorPosition(position);
+    };
+
+    const sendCursorPosition = (position) => {
+        if (ws.current?.readyState === WebSocket.OPEN) {
+            ws.current.send(JSON.stringify({
+                type: 'CURSOR_UPDATE',
+                roomId,
+                userId,
+                position,
+                color: userColor
+            }));
+        }
+    };
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     // Функция трансформации операций
     const transformOperation = (localPendingOperation, incomingRemoteOperations) => {
@@ -187,7 +267,6 @@ const CodeEditor = ({ roomId, userId }) => {
             }
         });
 
-        console.log(ops)
         return ops;
     };
 
@@ -244,6 +323,7 @@ const CodeEditor = ({ roomId, userId }) => {
     };
 
     useEffect(() => {
+        if (!isMountedRef.current) return;
         if (!roomId || !userId) return;
 
         const params = new URLSearchParams({ room: roomId, user: userId });
@@ -259,11 +339,11 @@ const CodeEditor = ({ roomId, userId }) => {
         };
 
         ws.current.onmessage = (event) => {
-            console.log(pendingChanges.current.length)
             const message = JSON.parse(event.data);
 
             switch (message.type) {
                 case 'INITIAL_STATE':
+                    setTextCursorPosition(0);
                     isApplyingRemoteChange.current = true;
                     //pendingChanges.current = []
                     setCode(message.content);
@@ -315,6 +395,7 @@ const CodeEditor = ({ roomId, userId }) => {
                     };
                     
                     isApplyingRemoteChange.current = false;
+
                     break;
             
                 case 'ERROR':
@@ -325,6 +406,20 @@ const CodeEditor = ({ roomId, userId }) => {
                         userId
                     }));
                     break;
+
+                case 'REMOTE_CURSOR':
+                    if (message.userId !== userId) {
+                        setRemoteCursors(prev => ({
+                            ...prev,
+                            [message.userId]: {
+                                position: message.position,
+                                color: message.color,
+                                name: message.userId,
+                                timestamp: Date.now()
+                            }
+                        }));
+                    }
+                    break;
             }
         };
 
@@ -333,22 +428,124 @@ const CodeEditor = ({ roomId, userId }) => {
         };
     }, [roomId, userId]);
 
+    useEffect(() => {
+        if (!editorRef.current) return;
+
+        const editorElement = editorRef.current;
+        const testSpan = document.createElement('span');
+        testSpan.textContent = 'X';
+        testSpan.style.fontFamily = '"Fira Code", "Consolas", monospace';
+        testSpan.style.fontSize = '16px';
+        testSpan.style.visibility = 'hidden';
+        editorElement.appendChild(testSpan);
+
+        const charWidth = testSpan.getBoundingClientRect().width;
+        const lineHeight = testSpan.getBoundingClientRect().height || 19;
+        editorElement.removeChild(testSpan);
+
+        setEditorDimensions({ lineHeight, charWidth });
+    }, [code]);
+
+    useEffect(() => {
+        if (!editorRef.current) return;
+
+        const textarea = editorRef.current.querySelector('textarea');
+        if (!textarea) return;
+
+        textareaRef.current = textarea;
+
+        const handleCursorMove = () => {
+            if (ignoreChanges.current) return;
+            const position = textarea.selectionStart;
+            sendCursorPosition(position);
+        };
+
+        const throttledHandleCursorMove = _.throttle(handleCursorMove, 100);
+
+        textarea.addEventListener('click', throttledHandleCursorMove);
+        textarea.addEventListener('keyup', throttledHandleCursorMove);
+        textarea.addEventListener('mousemove', throttledHandleCursorMove);
+
+        return () => {
+            textarea.removeEventListener('click', throttledHandleCursorMove);
+            textarea.removeEventListener('keyup', throttledHandleCursorMove);
+            textarea.removeEventListener('mousemove', throttledHandleCursorMove);
+        };
+    }, [code]);
+
+    const CursorOverlay = () => {
+        if (!editorRef.current) return null;
+
+        return Object.entries(remoteCursors).map(([id, cursor]) => {
+            if (id === userId || Date.now() - cursor.timestamp > 5000) return null;
+
+            const safePosition = Math.min(cursor.position, code.length);
+            const textBeforeCursor = code.substring(0, safePosition);
+            const lines = textBeforeCursor.split('\n');
+            const lineNumber = lines.length - 1;
+            const column = lines[lines.length - 1].length;
+
+            return (
+                <div
+                    key={id}
+                    className="remote-cursor"
+                    style={{
+                        position: 'absolute',
+                        top: `${(lineNumber + 1) * editorDimensions.lineHeight - 4}px`,
+                        left: `${column * editorDimensions.charWidth + 15}px`,
+                        height: `${editorDimensions.lineHeight}px`,
+                        borderLeft: `2px solid ${cursor.color}`,
+                        pointerEvents: 'none',
+                        zIndex: 10
+                    }}
+                >
+                    <div className="cursor-label" style={{
+                        position: 'absolute',
+                        top: '-20px',
+                        left: '-2px',
+                        backgroundColor: cursor.color,
+                        color: 'white',
+                        fontSize: '12px',
+                        padding: '2px 4px',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        {cursor.name}
+                    </div>
+                </div>
+            );
+        });
+    };
+
     return (
         <div className="editor-container">
-            <Editor
-                value={code}
-                onValueChange={handleCodeChange}
-                highlight={code => highlight(code, languages.js, 'python')}
-                padding={15}
-                style={{
-                    fontFamily: '"Fira Code", "Consolas", monospace',
-                    fontSize: 16,
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    minHeight: '300px',
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-                }}
-            />
+            <div className="status-bar">
+                Room: {roomId} | User: {userId}
+            </div>
+            <div style={{ position: 'relative' }} ref={editorRef}>
+                <Editor
+                    value={code}
+                    onValueChange={handleCodeChange}
+                    highlight={code => highlight(code, languages.js, 'javascript')}
+                    padding={15}
+                    style={{
+                        fontFamily: '"Fira Code", "Consolas", monospace',
+                        fontSize: 16,
+                        backgroundColor: '#f5f5f5',
+                        borderRadius: '4px',
+                        minHeight: '300px',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                        position: 'relative'
+                    }}
+                />
+                <CursorOverlay />
+            </div>
+
+            <div style={{ background: '#eee', padding: 10, marginTop: 10 }}>
+                <h4>Debug Info:</h4>
+                <pre>Current code length: {code.length}</pre>
+                <pre>Remote cursors: {JSON.stringify(remoteCursors, null, 2)}</pre>
+                <pre>Dimensions: {JSON.stringify(editorDimensions)}</pre>
+            </div>
         </div>
     );
 };
