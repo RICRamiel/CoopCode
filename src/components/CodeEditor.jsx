@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Editor from 'react-simple-code-editor';
 import { highlight, languages } from 'prismjs';
 import 'prismjs/components/prism-javascript';
@@ -183,6 +183,8 @@ const CodeEditor = ({ roomId, userId }) => {
 
     const [remoteCursors, setRemoteCursors] = useState({});
     const editorRef = useRef(null);
+    const transformedAfterRemoteChangeCursorPosition = useRef(null)
+    const lastSendCursorPosition = useRef(0)
     const userColor = getUserColor(userId);
     const textareaRef = useRef(null);
     const [editorDimensions, setEditorDimensions] = useState({ lineHeight: 19, charWidth: 8.79 });
@@ -193,8 +195,6 @@ const CodeEditor = ({ roomId, userId }) => {
 
         textareaRef.current.selectionStart = position;
         textareaRef.current.selectionEnd = position;
-
-        console.log(position)
 
         sendCursorPosition(position);
     };
@@ -395,14 +395,8 @@ const CodeEditor = ({ roomId, userId }) => {
                     
                     isApplyingRemoteChange.current = false;
 
-                    // Изменение позиции курсора
                     const currentCursorPos = textareaRef.current?.selectionStart || 0
-                    setTimeout(() => {
-                        if (textareaRef.current) {
-                            const transformedPos = transformCursorPosition(currentCursorPos, message.operations);
-                            setTextCursorPosition(transformedPos);
-                        }
-                    }, 10);
+                    transformedAfterRemoteChangeCursorPosition.current = transformCursorPosition(currentCursorPos, message.operations);
 
                     break;
             
@@ -436,6 +430,13 @@ const CodeEditor = ({ roomId, userId }) => {
         };
     }, [roomId, userId]);
 
+    useLayoutEffect(() => {
+        if (transformedAfterRemoteChangeCursorPosition.current != null) {
+            setTextCursorPosition(transformedAfterRemoteChangeCursorPosition.current)
+        }
+        transformedAfterRemoteChangeCursorPosition.current = null
+    }, [code]);
+
     useEffect(() => {
         if (!editorRef.current) return;
 
@@ -465,7 +466,10 @@ const CodeEditor = ({ roomId, userId }) => {
         const handleCursorMove = () => {
             if (isApplyingRemoteChange.current) return;
             const position = textarea.selectionStart;
-            sendCursorPosition(position);
+            if (lastSendCursorPosition.current !== position){
+                lastSendCursorPosition.current = position
+                sendCursorPosition(position);
+            }
         };
 
         const throttledHandleCursorMove = _.throttle(handleCursorMove, 100);
