@@ -147,34 +147,31 @@ const hashCode = (str) => {
     return hash;
 }
 
-const transformCursorPosition = (position, patches) => {
-    let newPosition = position;
-    const sortedPatches = [...patches].sort((a, b) => a.start1 - b.start1);
-
-    for (const patch of sortedPatches) {
-        const start = patch.start1;
-        const end = start + patch.length1;
-        const diff = patch.length2 - patch.length1;
-
-        if (newPosition <= start) {
-            continue;
-        }
-
-        if (newPosition <= end) {
-            if (patch.length1 === 0) {
-                newPosition = start + patch.length2;
-            } else {
-                const offset = newPosition - start;
-                const ratio = offset / patch.length1;
-                newPosition = start + Math.round(patch.length2 * ratio);
+function transformCursorPosition(cursorPos, operations) {
+    let newPos = cursorPos;
+    
+    operations.forEach(op => {
+        if (op.type === 'insert') {
+            // Если вставка произошла перед курсором - сдвигаем курсор вперед
+            if (op.pos <= newPos) {
+                newPos += op.text.length;
             }
-        } else {
-            newPosition += diff;
+        } else if (op.type === 'delete') {
+            // Если удаление пересекается с позицией курсора
+            if (op.pos < newPos) {
+                // Если курсор был внутри удаленного фрагмента
+                if (newPos <= op.pos + op.length) {
+                    newPos = op.pos; // Перемещаем в начало удаленного фрагмента
+                } else {
+                    // Иначе просто сдвигаем назад на длину удаления
+                    newPos -= op.length;
+                }
+            }
         }
-    }
-
-    return newPosition;
-};
+    });
+    
+    return newPos;
+}
 
 const CodeEditor = ({ roomId, userId }) => {
     const [code, setCode] = useState('');
@@ -184,7 +181,6 @@ const CodeEditor = ({ roomId, userId }) => {
     const ws = useRef(null);
     const isApplyingRemoteChange = useRef(false);
 
-    const ignoreChanges = useRef(false);
     const [remoteCursors, setRemoteCursors] = useState({});
     const editorRef = useRef(null);
     const userColor = getUserColor(userId);
@@ -197,6 +193,9 @@ const CodeEditor = ({ roomId, userId }) => {
 
         textareaRef.current.selectionStart = position;
         textareaRef.current.selectionEnd = position;
+
+        console.log(position)
+
         sendCursorPosition(position);
     };
 
@@ -380,7 +379,7 @@ const CodeEditor = ({ roomId, userId }) => {
                     if (message.userId === userId) return;
                     
                     isApplyingRemoteChange.current = true;
-                    
+
                     // Трансформируем pending операции
                     pendingChanges.current = pendingChanges.current.map(op => 
                         transformOperation(op, message.operations)
@@ -395,6 +394,15 @@ const CodeEditor = ({ roomId, userId }) => {
                     };
                     
                     isApplyingRemoteChange.current = false;
+
+                    // Изменение позиции курсора
+                    const currentCursorPos = textareaRef.current?.selectionStart || 0
+                    setTimeout(() => {
+                        if (textareaRef.current) {
+                            const transformedPos = transformCursorPosition(currentCursorPos, message.operations);
+                            setTextCursorPosition(transformedPos);
+                        }
+                    }, 10);
 
                     break;
             
@@ -455,7 +463,7 @@ const CodeEditor = ({ roomId, userId }) => {
         textareaRef.current = textarea;
 
         const handleCursorMove = () => {
-            if (ignoreChanges.current) return;
+            if (isApplyingRemoteChange.current) return;
             const position = textarea.selectionStart;
             sendCursorPosition(position);
         };
