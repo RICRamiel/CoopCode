@@ -132,6 +132,8 @@ class OperationTransformer {
 const dmp = new diff_match_patch();
 dmp.Diff_Timeout = 0;
 
+const DELETION_MARKER = '␡';
+
 const getUserColor = (userId) => {
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'];
     const index = Math.abs(hashCode(userId)) % colors.length;
@@ -175,7 +177,8 @@ function transformCursorPosition(cursorPos, operations) {
 
 const CodeEditor = ({ roomId, userId }) => {
     const [code, setCode] = useState('');
-    const lastServerState = useRef({ text: '', version: 0 });
+    const lastState = useRef({ text: '', version: 0 });
+    const lastServerSnapshot = useRef({ text: '', version: 0 });
     const pendingChanges = useRef([]);
     const lastId = useRef(-1);
     const ws = useRef(null);
@@ -189,6 +192,64 @@ const CodeEditor = ({ roomId, userId }) => {
     const textareaRef = useRef(null);
     const [editorDimensions, setEditorDimensions] = useState({ lineHeight: 19, charWidth: 8.79 });
     const isMountedRef = useRef(false);
+    const codeRef = useRef(code);
+
+// Обновляем ref при каждом изменении кода
+useEffect(() => {
+  codeRef.current = code;
+}, [code]);
+
+    /**
+ * Преобразует код, заменяя удаленные фрагменты маркерами
+ */
+function transformToMatchServer(currentCode, pendingOperations) {
+    // Создаем обратные операции для всех pending изменений
+    const reverseOperations = pendingOperations.map(op => {
+        if (op.type === 'insert') {
+            // Для вставки создаем операцию удаления
+            return {
+                type: 'delete',
+                pos: op.pos,
+                length: op.text.length
+            };
+        } else {
+            // Для удаления вставляем маркеры
+            return {
+                type: 'insert',
+                pos: op.pos,
+                text: DELETION_MARKER.repeat(op.length)
+            };
+        }
+    }).reverse(); // Важно применять в обратном порядке!
+
+    // Применяем обратные операции к текущему коду
+    return applyOperations(currentCode, reverseOperations);
+}
+
+/**
+ * Сравнивает два кода, игнорируя участки с маркерами удалений
+ */
+function areCodesMatching(codeWithMarkers, code) {
+    if (codeWithMarkers.length != code.length){
+        return false;
+    }
+
+    let i = 0, j = 0;
+    
+    while (i < codeWithMarkers.length && j < code.length) {
+        if (codeWithMarkers[i] === DELETION_MARKER) {
+            i++;
+            j++;
+        } else if (codeWithMarkers[i] === code[j]) {
+            i++;
+            j++;
+        } else {
+            return false;
+        }
+    }
+    
+    return true;
+}
 
     const setTextCursorPosition = (position) => {
         if (!textareaRef.current) return;
@@ -289,7 +350,7 @@ const CodeEditor = ({ roomId, userId }) => {
             roomId,
             userId,
             operations: ops,
-            baseVersion: lastServerState.current.version
+            baseVersion: lastState.current.version
         };
         
         ws.current.send(JSON.stringify(message));
@@ -300,7 +361,7 @@ const CodeEditor = ({ roomId, userId }) => {
         if (isApplyingRemoteChange.current) return;
         
         setCode(newCode);
-        const ops = calculateOperations(lastServerState.current.text, newCode);
+        const ops = calculateOperations(lastState.current.text, newCode);
         const transformedOps = [];
         
         ops.forEach(newOperation => {
@@ -317,7 +378,7 @@ const CodeEditor = ({ roomId, userId }) => {
         
         if (transformedOps.length > 0) {
             sendOperations(transformedOps);
-            lastServerState.current.text = newCode;
+            lastState.current.text = newCode;
         }
     };
 
@@ -342,11 +403,10 @@ const CodeEditor = ({ roomId, userId }) => {
 
             switch (message.type) {
                 case 'INITIAL_STATE':
-                    setTextCursorPosition(0);
                     isApplyingRemoteChange.current = true;
-                    //pendingChanges.current = []
+                    pendingChanges.current = []
                     setCode(message.content);
-                    lastServerState.current = {
+                    lastState.current = {
                         text: message.content,
                         version: message.version
                     };
@@ -354,10 +414,27 @@ const CodeEditor = ({ roomId, userId }) => {
                     break;
 
                 case 'OPERATIONS_CONFIRMED':
+                    if (message.newVersion != lastState.current.version + 1){
+                        ws.current.send(JSON.stringify({
+                            type: 'REQUEST_STATE',
+                            roomId,
+                            userId
+                        }));
+                        break;
+                    }
+                    if (message.appliedOperationIds.some(id => !pendingChanges.current.some(op => op.id === id))){
+                        ws.current.send(JSON.stringify({
+                            type: 'REQUEST_STATE',
+                            roomId,
+                            userId
+                        }));
+                        break;
+                    }
+
                     pendingChanges.current = pendingChanges.current.filter(
                         op => !message.appliedOperationIds.includes(op.id)
                     );
-                    lastServerState.current.version = message.newVersion;
+                    lastState.current.version = message.newVersion;
                     break;
 
                 case 'OPERATIONS_DECLINED':
@@ -366,7 +443,7 @@ const CodeEditor = ({ roomId, userId }) => {
                     pendingChanges.current = pendingChanges.current.filter(
                         op => !message.declinedOperationIds.includes(op.id)
                     );
-                    lastServerState.current.version = message.newVersion;
+                    lastState.current.version = message.newVersion;
 
                     ws.current.send(JSON.stringify({
                         type: 'REQUEST_STATE',
@@ -377,6 +454,15 @@ const CodeEditor = ({ roomId, userId }) => {
                     
                 case 'REMOTE_OPERATIONS':
                     if (message.userId === userId) return;
+                    if (message.newVersion <= lastState.current.version) return;
+                    if (message.newVersion != lastState.current.version + 1){
+                        ws.current.send(JSON.stringify({
+                            type: 'REQUEST_STATE',
+                            roomId,
+                            userId
+                        }));
+                        break;
+                    } 
                     
                     isApplyingRemoteChange.current = true;
 
@@ -386,12 +472,28 @@ const CodeEditor = ({ roomId, userId }) => {
                     );
                     
                     // Применяем серверные операции
-                    const newText = applyOperations(lastServerState.current.text, message.operations);
+                    const newText = applyOperations(lastState.current.text, message.operations);
                     setCode(newText);
-                    lastServerState.current = {
+                    lastState.current = {
                         text: newText,
                         version: message.newVersion
                     };
+
+                    if (message.newVersion === lastServerSnapshot.current.version){
+                        const currentCode = newText
+                        const transformedToMatchServerCode = transformToMatchServer(currentCode, pendingChanges.current)
+                        const codesMathing = areCodesMatching(transformedToMatchServerCode, lastServerSnapshot.current.text)
+
+                        console.log("local:" + transformedToMatchServerCode + "\nserver:" +  lastServerSnapshot.current.text + "\nmatching: " + codesMathing)
+
+                        if (!codesMathing){
+                            ws.current.send(JSON.stringify({
+                                type: 'REQUEST_STATE',
+                                roomId,
+                                userId
+                            }));
+                        }
+                    }
                     
                     isApplyingRemoteChange.current = false;
 
@@ -422,6 +524,29 @@ const CodeEditor = ({ roomId, userId }) => {
                         }));
                     }
                     break;
+
+                case 'CODE_SNAPSHOT':
+                    isApplyingRemoteChange.current = true;
+                    lastServerSnapshot.current = {
+                        text: message.content,
+                        version: message.newVersion
+                    }
+                    if (message.newVersion === lastState.current.version){
+                        const currentCode = codeRef.current
+                        const transformedToMatchServerCode = transformToMatchServer(currentCode, pendingChanges.current)
+                        const codesMathing = areCodesMatching(transformedToMatchServerCode, message.content)
+
+                        console.log("local: " + transformedToMatchServerCode + "\nserver:" +  message.content + "\nmatching: " + codesMathing)
+
+                        if (!codesMathing){
+                            ws.current.send(JSON.stringify({
+                                type: 'REQUEST_STATE',
+                                roomId,
+                                userId
+                            }));
+                        }
+                    }
+                    isApplyingRemoteChange.current = false;
             }
         };
 
