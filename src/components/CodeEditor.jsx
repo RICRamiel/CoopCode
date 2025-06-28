@@ -194,6 +194,22 @@ const CodeEditor = ({ roomId, userId }) => {
     const isMountedRef = useRef(false);
     const codeRef = useRef(code);
 
+    const updateRemoteCursors = (operations) => {
+        setRemoteCursors(prevCursors => {
+          const updatedCursors = {};
+          
+          // Преобразуем каждую позицию курсора через операции
+          Object.entries(prevCursors).forEach(([userId, cursorData]) => {
+            updatedCursors[userId] = {
+              ...cursorData,
+              position: transformCursorPosition(cursorData.position, operations)
+            };
+          });
+          
+          return updatedCursors;
+        });
+      };
+
 // Обновляем ref при каждом изменении кода
 useEffect(() => {
   codeRef.current = code;
@@ -380,6 +396,8 @@ function areCodesMatching(codeWithMarkers, code) {
             sendOperations(transformedOps);
             lastState.current.text = newCode;
         }
+
+        updateRemoteCursors(ops);
     };
 
     useEffect(() => {
@@ -499,6 +517,7 @@ function areCodesMatching(codeWithMarkers, code) {
 
                     const currentCursorPos = textareaRef.current?.selectionStart || 0
                     transformedAfterRemoteChangeCursorPosition.current = transformCursorPosition(currentCursorPos, message.operations);
+                    updateRemoteCursors(message.operations);
 
                     break;
             
