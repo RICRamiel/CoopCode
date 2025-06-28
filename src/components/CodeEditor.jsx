@@ -1,3 +1,5 @@
+// noinspection t
+
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Editor from 'react-simple-code-editor';
 import { highlight, languages } from 'prismjs';
@@ -59,7 +61,7 @@ class OperationTransformer {
 
         return incomingOperation.length;
     }
-    
+
     // Обратная трансформация (новая)
     static transformReverse(incomingOperation, missingOperation) {
         const transformed = {
@@ -151,7 +153,7 @@ const hashCode = (str) => {
 
 function transformCursorPosition(cursorPos, operations) {
     let newPos = cursorPos;
-    
+
     operations.forEach(op => {
         if (op.type === 'insert') {
             // Если вставка произошла перед курсором - сдвигаем курсор вперед
@@ -171,7 +173,7 @@ function transformCursorPosition(cursorPos, operations) {
             }
         }
     });
-    
+
     return newPos;
 }
 
@@ -196,76 +198,76 @@ const CodeEditor = ({ roomId, userId }) => {
 
     const updateRemoteCursors = (operations) => {
         setRemoteCursors(prevCursors => {
-          const updatedCursors = {};
-          
-          // Преобразуем каждую позицию курсора через операции
-          Object.entries(prevCursors).forEach(([userId, cursorData]) => {
-            updatedCursors[userId] = {
-              ...cursorData,
-              position: transformCursorPosition(cursorData.position, operations)
-            };
-          });
-          
-          return updatedCursors;
+            const updatedCursors = {};
+
+            // Преобразуем каждую позицию курсора через операции
+            Object.entries(prevCursors).forEach(([userId, cursorData]) => {
+                updatedCursors[userId] = {
+                    ...cursorData,
+                    position: transformCursorPosition(cursorData.position, operations)
+                };
+            });
+
+            return updatedCursors;
         });
-      };
+    };
 
 // Обновляем ref при каждом изменении кода
-useEffect(() => {
-  codeRef.current = code;
-}, [code]);
+    useEffect(() => {
+        codeRef.current = code;
+    }, [code]);
 
     /**
- * Преобразует код, заменяя удаленные фрагменты маркерами
- */
-function transformToMatchServer(currentCode, pendingOperations) {
-    // Создаем обратные операции для всех pending изменений
-    const reverseOperations = pendingOperations.map(op => {
-        if (op.type === 'insert') {
-            // Для вставки создаем операцию удаления
-            return {
-                type: 'delete',
-                pos: op.pos,
-                length: op.text.length
-            };
-        } else {
-            // Для удаления вставляем маркеры
-            return {
-                type: 'insert',
-                pos: op.pos,
-                text: DELETION_MARKER.repeat(op.length)
-            };
-        }
-    }).reverse(); // Важно применять в обратном порядке!
+     * Преобразует код, заменяя удаленные фрагменты маркерами
+     */
+    function transformToMatchServer(currentCode, pendingOperations) {
+        // Создаем обратные операции для всех pending изменений
+        const reverseOperations = pendingOperations.map(op => {
+            if (op.type === 'insert') {
+                // Для вставки создаем операцию удаления
+                return {
+                    type: 'delete',
+                    pos: op.pos,
+                    length: op.text.length
+                };
+            } else {
+                // Для удаления вставляем маркеры
+                return {
+                    type: 'insert',
+                    pos: op.pos,
+                    text: DELETION_MARKER.repeat(op.length)
+                };
+            }
+        }).reverse(); // Важно применять в обратном порядке!
 
-    // Применяем обратные операции к текущему коду
-    return applyOperations(currentCode, reverseOperations);
-}
-
-/**
- * Сравнивает два кода, игнорируя участки с маркерами удалений
- */
-function areCodesMatching(codeWithMarkers, code) {
-    if (codeWithMarkers.length != code.length){
-        return false;
+        // Применяем обратные операции к текущему коду
+        return applyOperations(currentCode, reverseOperations);
     }
 
-    let i = 0, j = 0;
-    
-    while (i < codeWithMarkers.length && j < code.length) {
-        if (codeWithMarkers[i] === DELETION_MARKER) {
-            i++;
-            j++;
-        } else if (codeWithMarkers[i] === code[j]) {
-            i++;
-            j++;
-        } else {
+    /**
+     * Сравнивает два кода, игнорируя участки с маркерами удалений
+     */
+    function areCodesMatching(codeWithMarkers, code) {
+        if (codeWithMarkers.length != code.length){
             return false;
         }
+
+        let i = 0, j = 0;
+
+        while (i < codeWithMarkers.length && j < code.length) {
+            if (codeWithMarkers[i] === DELETION_MARKER) {
+                i++;
+                j++;
+            } else if (codeWithMarkers[i] === code[j]) {
+                i++;
+                j++;
+            } else {
+                return false;
+            }
+        }
+
+        return true;
     }
-    
-    return true;
-}
 
     const setTextCursorPosition = (position) => {
         if (!textareaRef.current) return;
@@ -298,20 +300,20 @@ function areCodesMatching(codeWithMarkers, code) {
     // Функция трансформации операций
     const transformOperation = (localPendingOperation, incomingRemoteOperations) => {
         let transformedOp = { ...localPendingOperation };
-        
+
         incomingRemoteOperations.forEach(remoteOp => {
             transformedOp = OperationTransformer.transform(transformedOp, remoteOp)
         })
-        
+
         return transformedOp;
     };
 
     const calculateOperations = (oldText, newText) => {
         if (oldText === newText) return [];
-        
+
         const diffs = dmp.diff_main(oldText, newText);
         dmp.diff_cleanupSemantic(diffs);
-        
+
         let ops = [];
         let pos = 0;
 
@@ -327,7 +329,7 @@ function areCodesMatching(codeWithMarkers, code) {
                     });
                     pos += text.length;
                     break;
-                    
+
                 case -1:
                     ops.push({
                         id: lastId.current,
@@ -336,7 +338,7 @@ function areCodesMatching(codeWithMarkers, code) {
                         length: text.length
                     });
                     break;
-                    
+
                 case 0:
                     pos += text.length;
                     break;
@@ -360,7 +362,7 @@ function areCodesMatching(codeWithMarkers, code) {
 
     const sendOperations = (ops) => {
         if (!ws.current || ws.current.readyState !== WebSocket.OPEN || ops.length === 0) return;
-        
+
         const message = {
             type: 'APPLY_OPERATIONS',
             roomId,
@@ -368,30 +370,30 @@ function areCodesMatching(codeWithMarkers, code) {
             operations: ops,
             baseVersion: lastState.current.version
         };
-        
+
         ws.current.send(JSON.stringify(message));
         pendingChanges.current = pendingChanges.current.concat(ops);
     };
 
     const handleCodeChange = (newCode) => {
         if (isApplyingRemoteChange.current) return;
-        
+
         setCode(newCode);
         const ops = calculateOperations(lastState.current.text, newCode);
         const transformedOps = [];
-        
+
         ops.forEach(newOperation => {
             // Инициализируем transformed как копию исходной операции
             let transformed = {...newOperation};
-            
+
             // Последовательно трансформируем относительно каждой pending-операции
             //pendingChanges.current.forEach(pendingOperation => {
             //    transformed = OperationTransformer.transformReverse(transformed, pendingOperation);
             //});
-            
+
             transformedOps.push(transformed);
         });
-        
+
         if (transformedOps.length > 0) {
             sendOperations(transformedOps);
             lastState.current.text = newCode;
@@ -469,7 +471,7 @@ function areCodesMatching(codeWithMarkers, code) {
                         userId
                     }));
                     break;
-                    
+
                 case 'REMOTE_OPERATIONS':
                     if (message.userId === userId) return;
                     if (message.newVersion <= lastState.current.version) return;
@@ -480,15 +482,15 @@ function areCodesMatching(codeWithMarkers, code) {
                             userId
                         }));
                         break;
-                    } 
-                    
+                    }
+
                     isApplyingRemoteChange.current = true;
 
                     // Трансформируем pending операции
-                    pendingChanges.current = pendingChanges.current.map(op => 
+                    pendingChanges.current = pendingChanges.current.map(op =>
                         transformOperation(op, message.operations)
                     );
-                    
+
                     // Применяем серверные операции
                     const newText = applyOperations(lastState.current.text, message.operations);
                     setCode(newText);
@@ -512,7 +514,7 @@ function areCodesMatching(codeWithMarkers, code) {
                             }));
                         }
                     }
-                    
+
                     isApplyingRemoteChange.current = false;
 
                     const currentCursorPos = textareaRef.current?.selectionStart || 0
@@ -520,7 +522,7 @@ function areCodesMatching(codeWithMarkers, code) {
                     updateRemoteCursors(message.operations);
 
                     break;
-            
+
                 case 'ERROR':
                     console.error("Server error:", message.reason);
                     ws.current.send(JSON.stringify({
@@ -674,7 +676,7 @@ function areCodesMatching(codeWithMarkers, code) {
 
     return (
         <div className="editor-container">
-            <div className="status-bar">
+            <div className="status-bar" style={{color:"white"}}>
                 Room: {roomId} | User: {userId}
             </div>
             <div style={{ position: 'relative' }} ref={editorRef}>
@@ -686,8 +688,8 @@ function areCodesMatching(codeWithMarkers, code) {
                     style={{
                         fontFamily: '"Fira Code", "Consolas", monospace',
                         fontSize: 16,
-                        backgroundColor: '#f5f5f5',
-                        borderRadius: '4px',
+                        backgroundColor: '#ffffff',
+                        borderRadius: '0px',
                         minHeight: '300px',
                         boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
                         position: 'relative'
@@ -696,12 +698,12 @@ function areCodesMatching(codeWithMarkers, code) {
                 <CursorOverlay />
             </div>
 
-            <div style={{ background: '#eee', padding: 10, marginTop: 10 }}>
-                <h4>Debug Info:</h4>
-                <pre>Current code length: {code.length}</pre>
-                <pre>Remote cursors: {JSON.stringify(remoteCursors, null, 2)}</pre>
-                <pre>Dimensions: {JSON.stringify(editorDimensions)}</pre>
-            </div>
+            {/*<div style={{ background: '#eee', padding: 10, marginTop: 10 }}>*/}
+            {/*    <h4>Debug Info:</h4>*/}
+            {/*    <pre>Current code length: {code.length}</pre>*/}
+            {/*    <pre>Remote cursors: {JSON.stringify(remoteCursors, null, 2)}</pre>*/}
+            {/*    <pre>Dimensions: {JSON.stringify(editorDimensions)}</pre>*/}
+            {/*</div>*/}
         </div>
     );
 };

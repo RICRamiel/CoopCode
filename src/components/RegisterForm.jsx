@@ -1,19 +1,47 @@
 import React, {useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import LoginForm from "./LoginForm";
+import axios from "axios";
+import BASE_URL from "../config/config";
 
 const RegisterForm = () => {
-    const [username, setUsername] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const [credentials, setCredentials] = useState({
+        "name": "", "email": "", "password": ""
+    });
     const [confirmPassword, setConfirmPassword] = useState('');
     const navigate = useNavigate();
+    const [error, setError] = useState('');
+    const handleChange = (e) => {
+        setCredentials({
+            ...credentials, [e.target.name]: e.target.value
+        });
+    };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Здесь должна быть логика аутентификации
-        alert(`Зарегистрирован пользователь: ${username}`);
-        navigate('/');
+        if (credentials.password !== confirmPassword) {
+            alert("Passwords don't match");
+
+        } else {
+            setError("")
+            try {
+                // Отправка запроса на сервер
+                const response = await axios.post(BASE_URL + 'auth/register', credentials, {
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                // Сохранение токенов
+                const {accessToken, refreshToken} = response.data;
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('refreshToken', refreshToken);
+                localStorage.setItem("isAuth", "true")
+                // Перенаправление на защищенную страницу
+                navigate('/profile');
+            } catch (err) {
+                setError(err.message.value || 'Ошибка регистрации');
+                alert(error)
+            }
+        }
     };
 
     return (<form onSubmit={handleSubmit} style={{
@@ -26,44 +54,47 @@ const RegisterForm = () => {
         borderRadius: '8px',
         marginTop: '50px'
     }}>
-        <h2>Форма Регистрации</h2>
-        <label style={{marginBottom: '10px'}}>
+        <h2 style={{color:"white"}}>Форма Регистрации</h2>
+        <label style={{marginBottom: '10px', color:"white"}}>
             Имя пользователя:
             <input
+                name="name"
                 type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={credentials.name}
+                onChange={handleChange}
                 required
                 style={{
                     width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box'
                 }}
             />
         </label>
-        <label style={{marginBottom: '10px'}}>
+        <label style={{marginBottom: '10px', color:"white"}}>
             Электронная почта:
             <input
+                name="email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={credentials.email}
+                onChange={handleChange}
                 required
                 style={{
                     width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box'
                 }}
             />
         </label>
-        <label style={{marginBottom: '20px'}}>
+        <label style={{marginBottom: '20px', color:"white"}}>
             Пароль:
             <input
+                name="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={credentials.password}
+                onChange={handleChange}
                 required
                 style={{
                     width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box'
                 }}
             />
         </label>
-        <label style={{marginBottom: '20px'}}>
+        <label style={{marginBottom: '20px', color:"white"}}>
             Подтверждение пароля:
             <input
                 type="password"
