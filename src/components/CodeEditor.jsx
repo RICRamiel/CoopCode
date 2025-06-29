@@ -283,7 +283,6 @@ const CodeEditor = ({ roomId, userId }) => {
             ws.current.send(JSON.stringify({
                 type: 'CURSOR_UPDATE',
                 roomId,
-                userId,
                 position,
                 color: userColor
             }));
@@ -366,7 +365,6 @@ const CodeEditor = ({ roomId, userId }) => {
         const message = {
             type: 'APPLY_OPERATIONS',
             roomId,
-            userId,
             operations: ops,
             baseVersion: lastState.current.version
         };
@@ -404,17 +402,17 @@ const CodeEditor = ({ roomId, userId }) => {
 
     useEffect(() => {
         if (!isMountedRef.current) return;
-        if (!roomId || !userId) return;
+        if (!roomId) return;
 
-        const params = new URLSearchParams({ room: roomId, user: userId });
-        const wsUrl = `ws://192.168.0.114:8080/ws/code?${params.toString()}`;
+        const params = new URLSearchParams({ room: roomId });
+        const wsUrl = `ws://localhost:8080/ws/code?${params.toString()}`;
+        document.cookie = `AUTH_TOKEN=${localStorage.getItem("accessToken")}; path=/; SameSite=Lax`;
         ws.current = new WebSocket(wsUrl);
 
         ws.current.onopen = () => {
             ws.current.send(JSON.stringify({
                 type: 'REQUEST_STATE',
-                roomId,
-                userId
+                roomId
             }));
         };
 
@@ -437,16 +435,14 @@ const CodeEditor = ({ roomId, userId }) => {
                     if (message.newVersion != lastState.current.version + 1){
                         ws.current.send(JSON.stringify({
                             type: 'REQUEST_STATE',
-                            roomId,
-                            userId
+                            roomId
                         }));
                         break;
                     }
                     if (message.appliedOperationIds.some(id => !pendingChanges.current.some(op => op.id === id))){
                         ws.current.send(JSON.stringify({
                             type: 'REQUEST_STATE',
-                            roomId,
-                            userId
+                            roomId
                         }));
                         break;
                     }
@@ -467,8 +463,7 @@ const CodeEditor = ({ roomId, userId }) => {
 
                     ws.current.send(JSON.stringify({
                         type: 'REQUEST_STATE',
-                        roomId,
-                        userId
+                        roomId
                     }));
                     break;
 
@@ -478,8 +473,7 @@ const CodeEditor = ({ roomId, userId }) => {
                     if (message.newVersion != lastState.current.version + 1){
                         ws.current.send(JSON.stringify({
                             type: 'REQUEST_STATE',
-                            roomId,
-                            userId
+                            roomId
                         }));
                         break;
                     }
@@ -509,8 +503,8 @@ const CodeEditor = ({ roomId, userId }) => {
                         if (!codesMathing){
                             ws.current.send(JSON.stringify({
                                 type: 'REQUEST_STATE',
-                                roomId,
-                                userId
+                                roomId
+                                
                             }));
                         }
                     }
@@ -527,8 +521,8 @@ const CodeEditor = ({ roomId, userId }) => {
                     console.error("Server error:", message.reason);
                     ws.current.send(JSON.stringify({
                         type: 'REQUEST_STATE',
-                        roomId,
-                        userId
+                        roomId
+                        
                     }));
                     break;
 
@@ -562,8 +556,7 @@ const CodeEditor = ({ roomId, userId }) => {
                         if (!codesMathing){
                             ws.current.send(JSON.stringify({
                                 type: 'REQUEST_STATE',
-                                roomId,
-                                userId
+                                roomId
                             }));
                         }
                     }
