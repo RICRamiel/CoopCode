@@ -1,12 +1,12 @@
 // noinspection t
 
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, {useState, useEffect, useRef, useLayoutEffect} from 'react';
 import Editor from 'react-simple-code-editor';
-import { highlight, languages } from 'prismjs';
+import {highlight, languages} from 'prismjs';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/themes/prism.css';
 import 'prismjs/components/prism-python';
-import { diff_match_patch } from 'diff-match-patch';
+import {diff_match_patch} from 'diff-match-patch';
 import _ from 'lodash';
 
 class OperationTransformer {
@@ -177,10 +177,10 @@ function transformCursorPosition(cursorPos, operations) {
     return newPos;
 }
 
-const CodeEditor = ({ roomId, userId }) => {
+const CodeEditor = ({roomId, userId}) => {
     const [code, setCode] = useState('');
-    const lastState = useRef({ text: '', version: 0 });
-    const lastServerSnapshot = useRef({ text: '', version: 0 });
+    const lastState = useRef({text: '', version: 0});
+    const lastServerSnapshot = useRef({text: '', version: 0});
     const pendingChanges = useRef([]);
     const lastId = useRef(-1);
     const ws = useRef(null);
@@ -192,7 +192,7 @@ const CodeEditor = ({ roomId, userId }) => {
     const lastSendCursorPosition = useRef(0)
     const userColor = getUserColor(userId);
     const textareaRef = useRef(null);
-    const [editorDimensions, setEditorDimensions] = useState({ lineHeight: 19, charWidth: 8.79 });
+    const [editorDimensions, setEditorDimensions] = useState({lineHeight: 19, charWidth: 8.79});
     const isMountedRef = useRef(false);
     const codeRef = useRef(code);
 
@@ -248,7 +248,7 @@ const CodeEditor = ({ roomId, userId }) => {
      * Сравнивает два кода, игнорируя участки с маркерами удалений
      */
     function areCodesMatching(codeWithMarkers, code) {
-        if (codeWithMarkers.length != code.length){
+        if (codeWithMarkers.length != code.length) {
             return false;
         }
 
@@ -298,7 +298,7 @@ const CodeEditor = ({ roomId, userId }) => {
 
     // Функция трансформации операций
     const transformOperation = (localPendingOperation, incomingRemoteOperations) => {
-        let transformedOp = { ...localPendingOperation };
+        let transformedOp = {...localPendingOperation};
 
         incomingRemoteOperations.forEach(remoteOp => {
             transformedOp = OperationTransformer.transform(transformedOp, remoteOp)
@@ -318,7 +318,7 @@ const CodeEditor = ({ roomId, userId }) => {
 
         lastId.current++
         diffs.forEach(([type, text]) => {
-            switch(type) {
+            switch (type) {
                 case 1:
                     ops.push({
                         id: lastId.current,
@@ -404,8 +404,8 @@ const CodeEditor = ({ roomId, userId }) => {
         if (!isMountedRef.current) return;
         if (!roomId) return;
 
-        const params = new URLSearchParams({ room: roomId });
-        const wsUrl = `ws://localhost:8080/ws/code?${params.toString()}`;
+        const params = new URLSearchParams({room: roomId, user: userId});
+        const wsUrl = `ws://192.168.0.114:8080/ws/code?${params.toString()}`;
         document.cookie = `AUTH_TOKEN=${localStorage.getItem("accessToken")}; path=/; SameSite=Lax`;
         ws.current = new WebSocket(wsUrl);
 
@@ -432,14 +432,14 @@ const CodeEditor = ({ roomId, userId }) => {
                     break;
 
                 case 'OPERATIONS_CONFIRMED':
-                    if (message.newVersion != lastState.current.version + 1){
+                    if (message.newVersion != lastState.current.version + 1) {
                         ws.current.send(JSON.stringify({
                             type: 'REQUEST_STATE',
                             roomId
                         }));
                         break;
                     }
-                    if (message.appliedOperationIds.some(id => !pendingChanges.current.some(op => op.id === id))){
+                    if (message.appliedOperationIds.some(id => !pendingChanges.current.some(op => op.id === id))) {
                         ws.current.send(JSON.stringify({
                             type: 'REQUEST_STATE',
                             roomId
@@ -470,7 +470,7 @@ const CodeEditor = ({ roomId, userId }) => {
                 case 'REMOTE_OPERATIONS':
                     if (message.userId === userId) return;
                     if (message.newVersion <= lastState.current.version) return;
-                    if (message.newVersion != lastState.current.version + 1){
+                    if (message.newVersion != lastState.current.version + 1) {
                         ws.current.send(JSON.stringify({
                             type: 'REQUEST_STATE',
                             roomId
@@ -493,14 +493,14 @@ const CodeEditor = ({ roomId, userId }) => {
                         version: message.newVersion
                     };
 
-                    if (message.newVersion === lastServerSnapshot.current.version){
+                    if (message.newVersion === lastServerSnapshot.current.version) {
                         const currentCode = newText
                         const transformedToMatchServerCode = transformToMatchServer(currentCode, pendingChanges.current)
                         const codesMathing = areCodesMatching(transformedToMatchServerCode, lastServerSnapshot.current.text)
 
-                        console.log("local:" + transformedToMatchServerCode + "\nserver:" +  lastServerSnapshot.current.text + "\nmatching: " + codesMathing)
+                        console.log("local:" + transformedToMatchServerCode + "\nserver:" + lastServerSnapshot.current.text + "\nmatching: " + codesMathing)
 
-                        if (!codesMathing){
+                        if (!codesMathing) {
                             ws.current.send(JSON.stringify({
                                 type: 'REQUEST_STATE',
                                 roomId
@@ -546,14 +546,14 @@ const CodeEditor = ({ roomId, userId }) => {
                         text: message.content,
                         version: message.newVersion
                     }
-                    if (message.newVersion === lastState.current.version){
+                    if (message.newVersion === lastState.current.version) {
                         const currentCode = codeRef.current
                         const transformedToMatchServerCode = transformToMatchServer(currentCode, pendingChanges.current)
                         const codesMathing = areCodesMatching(transformedToMatchServerCode, message.content)
 
-                        console.log("local: " + transformedToMatchServerCode + "\nserver:" +  message.content + "\nmatching: " + codesMathing)
+                        console.log("local: " + transformedToMatchServerCode + "\nserver:" + message.content + "\nmatching: " + codesMathing)
 
-                        if (!codesMathing){
+                        if (!codesMathing) {
                             ws.current.send(JSON.stringify({
                                 type: 'REQUEST_STATE',
                                 roomId
@@ -591,7 +591,7 @@ const CodeEditor = ({ roomId, userId }) => {
         const lineHeight = testSpan.getBoundingClientRect().height || 19;
         editorElement.removeChild(testSpan);
 
-        setEditorDimensions({ lineHeight, charWidth });
+        setEditorDimensions({lineHeight, charWidth});
     }, [code]);
 
     useEffect(() => {
@@ -605,7 +605,7 @@ const CodeEditor = ({ roomId, userId }) => {
         const handleCursorMove = () => {
             if (isApplyingRemoteChange.current) return;
             const position = textarea.selectionStart;
-            if (lastSendCursorPosition.current !== position){
+            if (lastSendCursorPosition.current !== position) {
                 lastSendCursorPosition.current = position
                 sendCursorPosition(position);
             }
@@ -669,10 +669,10 @@ const CodeEditor = ({ roomId, userId }) => {
 
     return (
         <div className="editor-container">
-            <div className="status-bar" style={{color:"white"}}>
+            <div className="status-bar" style={{color: "white"}}>
                 Room: {roomId} | User: {userId}
             </div>
-            <div style={{ position: 'relative' }} ref={editorRef}>
+            <div style={{position: 'relative'}} ref={editorRef}>
                 <Editor
                     value={code}
                     onValueChange={handleCodeChange}
@@ -688,7 +688,7 @@ const CodeEditor = ({ roomId, userId }) => {
                         position: 'relative'
                     }}
                 />
-                <CursorOverlay />
+                <CursorOverlay/>
             </div>
 
             {/*<div style={{ background: '#eee', padding: 10, marginTop: 10 }}>*/}
