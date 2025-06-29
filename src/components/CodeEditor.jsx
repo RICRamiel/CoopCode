@@ -405,7 +405,7 @@ const CodeEditor = ({roomId, userId}) => {
         if (!roomId) return;
 
         const params = new URLSearchParams({room: roomId, user: userId});
-        const wsUrl = `ws://192.168.0.114:8080/ws/code?${params.toString()}`;
+        const wsUrl = `ws://localhost:8080/ws/code?${params.toString()}`;
         document.cookie = `AUTH_TOKEN=${localStorage.getItem("accessToken")}; path=/; SameSite=Lax`;
         ws.current = new WebSocket(wsUrl);
 
