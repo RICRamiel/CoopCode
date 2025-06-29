@@ -21,6 +21,17 @@ const MiniProfile = ({setIsAuth}) => {
 
         fetchData();
     }, []);
+    const handleLogout = async (e) => {
+        try {
+            await api.post('/auth/revoke', {"value": localStorage.getItem("refreshToken")});
+        } catch (err) {
+            console.log(err)
+        }
+        localStorage.clear()
+        setIsAuth(false)
+        navigate('/')
+        window.location.reload()
+    }
 
 
     return (<div>
@@ -35,11 +46,7 @@ const MiniProfile = ({setIsAuth}) => {
         }}>
             {data && data.name}
         </button>
-        <button onClick={() => {
-            localStorage.clear()
-            setIsAuth(false)
-            navigate('/')
-        }} style={{
+        <button onClick={handleLogout} style={{
             padding: '8px 16px',
             backgroundColor: '#4CAF50',
             color: 'white',
