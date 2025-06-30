@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, {useState, useEffect} from 'react';
+import {useNavigate} from 'react-router-dom';
 import BASE_URL from "../config/config";
 import axios from "axios";
 
@@ -13,15 +13,15 @@ const LoginForm = () => {
     // Извлекаем токены из кук при загрузке
     useEffect(() => {
         const cookies = document.cookie.split(';');
-        const tokenCookies = cookies.filter(cookie => 
-            cookie.trim().startsWith('access_token=') || 
+        const tokenCookies = cookies.filter(cookie =>
+            cookie.trim().startsWith('access_token=') ||
             cookie.trim().startsWith('refresh_token=')
         );
 
         if (tokenCookies.length === 2) {
             const accessToken = tokenCookies[0].split('=')[1];
             const refreshToken = tokenCookies[1].split('=')[1];
-            
+
             localStorage.setItem('accessToken', accessToken);
             localStorage.setItem('refreshToken', refreshToken);
             localStorage.setItem("isAuth", "true");
@@ -44,10 +44,10 @@ const LoginForm = () => {
         setError("");
         try {
             const response = await axios.post(BASE_URL + 'auth/login', credentials, {
-                headers: { 'Content-Type': 'application/json' }
+                headers: {'Content-Type': 'application/json'}
             });
 
-            const { accessToken, refreshToken } = response.data;
+            const {accessToken, refreshToken} = response.data;
             localStorage.setItem('accessToken', accessToken);
             localStorage.setItem('refreshToken', refreshToken);
             localStorage.setItem("isAuth", "true");
@@ -75,10 +75,10 @@ const LoginForm = () => {
             marginTop: '50px',
             backgroundColor: '#333'
         }}>
-            <h2 style={{ color: "white", textAlign: 'center' }}>Форма Входа</h2>
-            {error && <div style={{ color: 'red', textAlign: 'center' }}>{error}</div>}
-            
-            <label style={{ marginBottom: '15px', color: 'white' }}>
+            <h2 style={{color: "white", textAlign: 'center'}}>Форма Входа</h2>
+            {error && <div style={{color: 'red', textAlign: 'center'}}>{error}</div>}
+
+            <label style={{marginBottom: '15px', color: 'white'}}>
                 Электронная почта:
                 <input
                     name="email"
@@ -87,6 +87,7 @@ const LoginForm = () => {
                     onChange={handleChange}
                     required
                     style={{
+                        boxSizing: "border-box",
                         width: '100%',
                         padding: '8px',
                         marginTop: '5px',
@@ -95,8 +96,8 @@ const LoginForm = () => {
                     }}
                 />
             </label>
-            
-            <label style={{ marginBottom: '20px', color: 'white' }}>
+
+            <label style={{marginBottom: '20px', color: 'white'}}>
                 Пароль:
                 <input
                     name="password"
@@ -105,6 +106,7 @@ const LoginForm = () => {
                     onChange={handleChange}
                     required
                     style={{
+                        boxSizing: "border-box",
                         width: '100%',
                         padding: '8px',
                         marginTop: '5px',
@@ -113,7 +115,7 @@ const LoginForm = () => {
                     }}
                 />
             </label>
-            
+
             <button
                 type="submit"
                 style={{
@@ -128,9 +130,9 @@ const LoginForm = () => {
             >
                 Войти
             </button>
-            
-            <div style={{ textAlign: 'center', color: '#aaa', margin: '10px 0' }}>или</div>
-            
+
+            <div style={{textAlign: 'center', color: '#aaa', margin: '10px 0'}}>или</div>
+
             <button
                 type="button"
                 onClick={handleGoogleLogin}
@@ -152,9 +154,10 @@ const LoginForm = () => {
                     height="18"
                     viewBox="0 0 24 24"
                     fill="white"
-                    style={{ marginRight: '8px' }}
+                    style={{marginRight: '8px'}}
                 >
-                    <path d="M12.545 10.239v3.821h5.445c-0.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866 0.549 3.921 1.453l2.814-2.814c-1.784-1.664-4.153-2.675-6.735-2.675-5.522 0-10 4.477-10 10s4.478 10 10 10c8.396 0 10-7.524 10-10 0-0.671-0.069-1.325-0.189-1.955h-9.811z" />
+                    <path
+                        d="M12.545 10.239v3.821h5.445c-0.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866 0.549 3.921 1.453l2.814-2.814c-1.784-1.664-4.153-2.675-6.735-2.675-5.522 0-10 4.477-10 10s4.478 10 10 10c8.396 0 10-7.524 10-10 0-0.671-0.069-1.325-0.189-1.955h-9.811z"/>
                 </svg>
                 Войти через Google
             </button>

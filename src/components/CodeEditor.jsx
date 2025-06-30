@@ -405,7 +405,7 @@ const CodeEditor = ({roomId, userId}) => {
         if (!roomId) return;
 
         const params = new URLSearchParams({room: roomId, user: userId});
-        const wsUrl = `ws://localhost:8080/ws/code?${params.toString()}`;
+        const wsUrl = `ws://localhost:4000/ws/code?${params.toString()}`;
         document.cookie = `AUTH_TOKEN=${localStorage.getItem("accessToken")}; path=/; SameSite=Lax`;
         ws.current = new WebSocket(wsUrl);
 
@@ -504,7 +504,7 @@ const CodeEditor = ({roomId, userId}) => {
                             ws.current.send(JSON.stringify({
                                 type: 'REQUEST_STATE',
                                 roomId
-                                
+
                             }));
                         }
                     }
@@ -522,7 +522,7 @@ const CodeEditor = ({roomId, userId}) => {
                     ws.current.send(JSON.stringify({
                         type: 'REQUEST_STATE',
                         roomId
-                        
+
                     }));
                     break;
 
